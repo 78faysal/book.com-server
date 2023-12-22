@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -13,7 +14,8 @@ app.use(cors({
     ],
     credentials: true
 }))
-app.use(express.json())
+app.use(express.json());
+app.use(cookieParser());
 
 
 
@@ -30,6 +32,23 @@ const client = new MongoClient(uri, {
     }
 });
 
+
+// middleware 
+const verifyToken = (req, res, next) => {
+    const token = req.cookies?.token;
+    // console.log('token in the middleware', token);
+    if(!token){
+        return res.status(401).send({message: 'Unauthorized access'})
+    }
+    jwt.verify(token, process.env.ACCESS_TOKEN, (error, decoded) => {
+        if(error){
+            return res.status(401).send({message: "Unauthorized access"})
+        }
+        req.user = decoded;
+        next();
+    })
+}
+
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
@@ -41,9 +60,9 @@ async function run() {
 
         //jwt
         app.post('/jwt', async(req, res) => {
-            const email = req.body;
-            console.log('email for token', email);
-            const token = jwt.sign(email, process.env.ACCESS_TOKEN, {expiresIn: '1h'})
+            const user = req.body;
+            console.log('email for token', user);
+            const token = jwt.sign(user, process.env.ACCESS_TOKEN, {expiresIn: '1h'})
             res
             .cookie('token', token, {
                 httpOnly: true,
@@ -51,6 +70,12 @@ async function run() {
                 sameSite: 'none',
             })
             .send({success: true})
+        })
+
+        app.post('/logOut', async(req, res) => {
+            const user = req.body;
+            console.log('logging out', user);
+            res.clearCookie('token', {maxAge: 0}).send({success: true})
         })
 
         // rooms 
@@ -70,9 +95,17 @@ async function run() {
 
 
         // bookings 
-        app.get('/bookings', async (req, res) => {
-            const query = bookingsCollection.find();
-            const result = await query.toArray();
+        app.get('/bookings', verifyToken, async (req, res) => {
+            console.log('owner', req.user);
+            const owner = req.user.email;
+            if(req.user.email !== owner){
+                return res.status(403).send({message: 'forbidden access'})
+            }
+            let query = {};
+            if(req.query?.email){
+                query = {email: req.query.email}
+            }
+            const result = await bookingsCollection.find(query).toArray();
             // console.log(result);
             res.send(result)
         })
@@ -90,7 +123,7 @@ async function run() {
             res.send(result)
         })
 
-        app.put('/bookings/:id', async (req, res) => {
+        app.put('/bookings/:id', verifyToken, async (req, res) => {
             const id = req.params.id;
             const filter = { _id: new ObjectId(id) };
             const updatedBooking = req.body.time;
