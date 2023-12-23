@@ -37,12 +37,12 @@ const client = new MongoClient(uri, {
 const verifyToken = (req, res, next) => {
     const token = req.cookies?.token;
     // console.log('token in the middleware', token);
-    if(!token){
-        return res.status(401).send({message: 'Unauthorized access'})
+    if (!token) {
+        return res.status(401).send({ message: 'Unauthorized access' })
     }
     jwt.verify(token, process.env.ACCESS_TOKEN, (error, decoded) => {
-        if(error){
-            return res.status(401).send({message: "Unauthorized access"})
+        if (error) {
+            return res.status(401).send({ message: "Unauthorized access" })
         }
         req.user = decoded;
         next();
@@ -59,23 +59,23 @@ async function run() {
 
 
         //jwt
-        app.post('/jwt', async(req, res) => {
+        app.post('/jwt', async (req, res) => {
             const user = req.body;
             console.log('email for token', user);
-            const token = jwt.sign(user, process.env.ACCESS_TOKEN, {expiresIn: '1h'})
+            const token = jwt.sign(user, process.env.ACCESS_TOKEN, { expiresIn: '1h' })
             res
-            .cookie('token', token, {
-                httpOnly: true,
-                secure: true,
-                sameSite: 'none',
-            })
-            .send({success: true})
+                .cookie('token', token, {
+                    httpOnly: true,
+                    secure: true,
+                    sameSite: 'none',
+                })
+                .send({ success: true })
         })
 
-        app.post('/logOut', async(req, res) => {
+        app.post('/logOut', async (req, res) => {
             const user = req.body;
             console.log('logging out', user);
-            res.clearCookie('token', {maxAge: 0}).send({success: true})
+            res.clearCookie('token', { maxAge: 0 }).send({ success: true })
         })
 
         // rooms 
@@ -92,18 +92,35 @@ async function run() {
             res.send(result);
         })
 
+        app.put('/rooms/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+            const room = await roomsCollection.findOne(query);
+            const reviewsArray = room.reviews || [];
+            const reviewMessage = req.body;
+            reviewsArray.push(reviewMessage);
+            const updateResult = {
+                $set: {
+                    reviews: reviewsArray
+                }
+            }
+
+            const result = await roomsCollection.updateOne(query, updateResult);
+            res.send(result);
+        })
+
 
 
         // bookings 
         app.get('/bookings', verifyToken, async (req, res) => {
             console.log('owner', req.user);
             const owner = req.user.email;
-            if(req.user.email !== owner){
-                return res.status(403).send({message: 'forbidden access'})
+            if (req.user.email !== owner) {
+                return res.status(403).send({ message: 'forbidden access' })
             }
             let query = {};
-            if(req.query?.email){
-                query = {email: req.query.email}
+            if (req.query?.email) {
+                query = { email: req.query.email }
             }
             const result = await bookingsCollection.find(query).toArray();
             // console.log(result);
@@ -119,8 +136,17 @@ async function run() {
 
         app.post('/bookings', async (req, res) => {
             const booking = req.body;
-            const result = await bookingsCollection.insertOne(booking);
-            res.send(result)
+            try {
+                const result = await bookingsCollection.insertOne(booking);
+                res.send(result)
+            }
+            catch(error) {
+                if(error.code === 11000){
+                    booking._id = new ObjectId();
+                    const result = await bookingsCollection.insertOne(booking);
+                    res.send(result)
+                }
+            }
         })
 
         app.put('/bookings/:id', verifyToken, async (req, res) => {
@@ -137,9 +163,9 @@ async function run() {
             res.send(result);
         })
 
-        app.delete('/bookings/:id', async(req, res) => {
+        app.delete('/bookings/:id', async (req, res) => {
             const id = req.params.id;
-            const query = {_id: new ObjectId(id)};
+            const query = { _id: new ObjectId(id) };
             const result = await bookingsCollection.deleteOne(query);
             res.send(result);
         })
