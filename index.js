@@ -95,18 +95,31 @@ async function run() {
         app.put('/rooms/:id', async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
+            const request = req.body;
             const room = await roomsCollection.findOne(query);
-            const reviewsArray = room.reviews || [];
-            const reviewMessage = req.body;
-            reviewsArray.push(reviewMessage);
-            const updateResult = {
-                $set: {
-                    reviews: reviewsArray
+            if (request.booked == true) {
+                const updateRoomBooking = {
+                    $set: {
+                        booked: true
+                    }
                 }
-            }
 
-            const result = await roomsCollection.updateOne(query, updateResult);
-            res.send(result);
+                const result = await roomsCollection.updateOne(query, updateRoomBooking);
+                res.send(result);
+            }
+            else if (request.review) {
+                const reviewsArray = room.reviews || [];
+                const reviewMessage = req.body;
+                reviewsArray.push(reviewMessage);
+                const updateResult = {
+                    $set: {
+                        reviews: reviewsArray
+                    }
+                }
+
+                const result = await roomsCollection.updateOne(query, updateResult);
+                res.send(result);
+            }
         })
 
 
@@ -140,8 +153,8 @@ async function run() {
                 const result = await bookingsCollection.insertOne(booking);
                 res.send(result)
             }
-            catch(error) {
-                if(error.code === 11000){
+            catch (error) {
+                if (error.code === 11000) {
                     booking._id = new ObjectId();
                     const result = await bookingsCollection.insertOne(booking);
                     res.send(result)
@@ -165,6 +178,7 @@ async function run() {
 
         app.delete('/bookings/:id', async (req, res) => {
             const id = req.params.id;
+            console.log(id, 'requested for delete');
             const query = { _id: new ObjectId(id) };
             const result = await bookingsCollection.deleteOne(query);
             res.send(result);
