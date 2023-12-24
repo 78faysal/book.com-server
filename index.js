@@ -165,36 +165,36 @@ async function run() {
         app.get('/bookings', verifyToken, async (req, res) => {
             console.log('owner', req.user);
             const owner = req?.user?.email;
-        
+
             if (req.user.email !== owner) {
                 return res.status(403).send({ message: 'forbidden access' });
             }
-        
+
             const query = { email: owner };
             const bookings = await roomsCollection.find(query).toArray();
-        
+
             try {
                 const result = await bookingsCollection.insertMany(bookings);
                 const insertedIds = Object.values(result.insertedIds);
 
                 const insertedBookings = await bookingsCollection.find({ _id: { $in: insertedIds } }).toArray();
-        
+
                 res.send(insertedBookings);
             } catch (error) {
                 if (error.code === 11000) {
                     const newBookings = [];
-        
+
                     for (const booking of bookings) {
                         const newBooking = { ...booking, _id: new ObjectId() };
                         newBookings.push(newBooking);
                     }
-        
+
                     const result = await bookingsCollection.insertMany(newBookings);
 
                     const insertedIds = Object.values(result.insertedIds);
-        
+
                     const insertedBookings = await bookingsCollection.find({ _id: { $in: insertedIds } }).toArray();
-        
+
                     res.send(insertedBookings);
                 } else {
                     console.error('Error inserting bookings:', error);
