@@ -10,10 +10,12 @@ const port = process.env.PORT || 5000;
 // midleware 
 app.use(cors({
     origin: [
-        'http://localhost:5173'
+        'http://localhost:5173',
+        'https://book-com.web.app',
+        'https://book-com.firebaseapp.com'
     ],
     credentials: true
-}))
+}));
 app.use(express.json());
 app.use(cookieParser());
 
@@ -96,11 +98,14 @@ async function run() {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
             const request = req.body;
+            // console.log(request.email);
             const room = await roomsCollection.findOne(query);
             if (request.booked == true) {
                 const updateRoomBooking = {
                     $set: {
-                        booked: true
+                        booked: true,
+                        email: request.email,
+                        time: request.time
                     }
                 }
 
@@ -125,20 +130,78 @@ async function run() {
 
 
         // bookings 
+        // app.get('/bookings', verifyToken, async (req, res) => {
+        //     console.log('owner', req.user);
+        //     const owner = req?.user?.email;
+        //     if (req.user.email !== owner) {
+        //         return res.status(403).send({ message: 'forbidden access' })
+        //     }
+        //     // let query = {};
+        //     // if (req.query?.email) {
+        //     //     query = { email: req.query.email }
+        //     // }
+        //     const query = { email: owner };
+        //     const bookings = await roomsCollection.find(query).toArray();
+
+        //     try {
+        //         const result = await bookingsCollection.insertMany(bookings);
+        //     }
+        //     catch (error) {
+        //         if (error.code === 11000) {
+        //             const newBookings = [];
+
+        //             for (const booking of bookings) {
+        //                 const newBooking = { ...booking, _id: new ObjectId() };
+        //                 newBookings.push(newBooking);
+        //             }
+
+        //             const result = await bookingsCollection.insertMany(newBookings);
+        //             res.send(result);
+        //         }
+        //     }
+        //     // console.log(result);
+        //     res.send(result)
+        // })
         app.get('/bookings', verifyToken, async (req, res) => {
             console.log('owner', req.user);
-            const owner = req.user.email;
+            const owner = req?.user?.email;
+        
             if (req.user.email !== owner) {
-                return res.status(403).send({ message: 'forbidden access' })
+                return res.status(403).send({ message: 'forbidden access' });
             }
-            let query = {};
-            if (req.query?.email) {
-                query = { email: req.query.email }
+        
+            const query = { email: owner };
+            const bookings = await roomsCollection.find(query).toArray();
+        
+            try {
+                const result = await bookingsCollection.insertMany(bookings);
+                const insertedIds = Object.values(result.insertedIds);
+
+                const insertedBookings = await bookingsCollection.find({ _id: { $in: insertedIds } }).toArray();
+        
+                res.send(insertedBookings);
+            } catch (error) {
+                if (error.code === 11000) {
+                    const newBookings = [];
+        
+                    for (const booking of bookings) {
+                        const newBooking = { ...booking, _id: new ObjectId() };
+                        newBookings.push(newBooking);
+                    }
+        
+                    const result = await bookingsCollection.insertMany(newBookings);
+
+                    const insertedIds = Object.values(result.insertedIds);
+        
+                    const insertedBookings = await bookingsCollection.find({ _id: { $in: insertedIds } }).toArray();
+        
+                    res.send(insertedBookings);
+                } else {
+                    console.error('Error inserting bookings:', error);
+                    res.status(500).send({ message: 'Internal Server Error' });
+                }
             }
-            const result = await bookingsCollection.find(query).toArray();
-            // console.log(result);
-            res.send(result)
-        })
+        });
 
         app.get('/bookings/:id', async (req, res) => {
             const id = req.params.id;
