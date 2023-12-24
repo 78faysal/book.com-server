@@ -10,7 +10,7 @@ const port = process.env.PORT || 5000;
 // midleware 
 app.use(cors({
     origin: [
-        'http://localhost:5173',
+        // 'http://localhost:5173',
         'https://book-com.web.app',
         'https://book-com.firebaseapp.com'
     ],
